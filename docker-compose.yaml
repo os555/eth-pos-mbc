@@ -1,0 +1,94 @@
+services:
+
+  init-reth:
+    image: ghcr.io/paradigmxyz/reth:latest
+    command:
+      - init
+      - --chain=/config/genesis.json
+      - --datadir=/execution-data
+
+    volumes:
+      - ./data/execution-data:/execution-data
+      - ./config/metadata:/config
+
+  reth:
+    image: ghcr.io/paradigmxyz/reth:latest
+    depends_on:
+      - init-reth
+    network_mode: "host"
+    command:
+      - node
+      - --chain=/config/genesis.json
+      - --datadir=/execution-data
+      - --authrpc.jwtsecret=/config/jwtsecret
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.port=8551
+      - --http
+      - --http.api=all
+      - --http.addr=0.0.0.0
+      - --http.port=8545
+      - --http.corsdomain="*"
+      - --ws
+      - --ws.api=all
+      - --ws.addr=0.0.0.0
+      - --ws.port=8546
+      - --ws.origins="*"
+ 
+    volumes:
+      - ./data/execution-data:/execution-data
+      - ./config/metadata:/config
+    restart: unless-stopped
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "100m"
+        max-file: "10"
+
+  beacon:
+    image: sigp/lighthouse:latest-unstable
+    command:
+      - lighthouse
+      - beacon_node
+      - --datadir=/consensus-data
+      - --disable-peer-scoring
+      - --disable-packet-filter
+      - --enable-private-discovery
+      - --staking
+      - --http 
+      - --http-address=0.0.0.0
+      - --http-port=5052
+      - --validator-monitor-auto
+      - --http-allow-origin=*
+      - --listen-address=0.0.0.0
+      - --port=9000
+      - --target-peers=0
+      - --testnet-dir=/config
+      - --execution-endpoints=http://127.0.0.1:8551
+      - --jwt-secrets=/config/jwtsecret
+      - --suggested-fee-recipient=${FEE_RECIPIENT}
+      - --allow-insecure-genesis-sync
+    volumes:
+      - ./data/consensus-data:/consensus-data
+      - ./config/metadata:/config
+    depends_on:
+      - reth
+    restart: unless-stopped
+
+  validator:
+    image: sigp/lighthouse:latest-unstable
+    command:
+      - lighthouse
+      - vc
+      - --debug-level=info
+      - --testnet-dir=/config
+      - --validators-dir=/validator-keys/keys
+      - --secrets-dir=/validator-keys/secrets
+      - --init-slashing-protection
+      - --beacon-nodes=http://beacon:5052
+      - --suggested-fee-recipient=${FEE_RECIPIENT}
+    volumes:
+      - ./config/metadata:/config
+      - ./vc/data:/validator-keys
+    depends_on:
+      - beacon
+    restart: unless-stopped
