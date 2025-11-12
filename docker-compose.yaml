@@ -1,48 +1,51 @@
 services:
 
-  init-reth:
-    image: ghcr.io/paradigmxyz/reth:latest
-    command:
-      - init
-      - --chain=/config/genesis.json
-      - --datadir=/execution-data
+  init-geth:
+    image: ethereum/client-go:latest
+    command: >
+       --datadir=/execution-data init /config/genesis.json
 
     volumes:
       - ./data/execution-data:/execution-data
       - ./config/metadata:/config
 
-  reth:
-    image: ghcr.io/paradigmxyz/reth:latest
+  geth:
+    image: ethereum/client-go:latest
     depends_on:
-      - init-reth
-    network_mode: "host"
+      - init-geth
     command:
-      - node
-      - --chain=/config/genesis.json
+      - --networkid=1460011
+      - --state.scheme=path
+      - --verbosity=3
       - --datadir=/execution-data
-      - --authrpc.jwtsecret=/config/jwtsecret
-      - --authrpc.addr=0.0.0.0
-      - --authrpc.port=8551
+      - --nat=extip:${NODE_PUBLIC_IP}
       - --http
-      - --http.api=all
       - --http.addr=0.0.0.0
       - --http.port=8545
-      - --http.corsdomain="*"
+      - --http.vhosts=*
+      - --http.corsdomain=*
+      - --http.api=admin,engine,net,eth,web3,debug,txpool
       - --ws
-      - --ws.api=all
       - --ws.addr=0.0.0.0
       - --ws.port=8546
-      - --ws.origins="*"
- 
+      - --ws.api=admin,engine,net,eth,web3,debug,txpool
+      - --ws.origins=*
+      - --allow-insecure-unlock
+      - --authrpc.port=8551
+      - --authrpc.addr=0.0.0.0
+      - --authrpc.vhosts=*
+      - --authrpc.jwtsecret=/config/jwtsecret
+      - --syncmode=full
+      - --rpc.allow-unprotected-txs
+      - --nodiscover
+      - --maxpeers=1
+
     volumes:
       - ./data/execution-data:/execution-data
       - ./config/metadata:/config
+    ports:
+      - "9545:8545"
     restart: unless-stopped
-    logging:
-      driver: "json-file"
-      options:
-        max-size: "100m"
-        max-file: "10"
 
   beacon:
     image: sigp/lighthouse:latest-unstable
@@ -63,7 +66,7 @@ services:
       - --port=9000
       - --target-peers=0
       - --testnet-dir=/config
-      - --execution-endpoints=http://127.0.0.1:8551
+      - --execution-endpoints=http://geth:8551
       - --jwt-secrets=/config/jwtsecret
       - --suggested-fee-recipient=${FEE_RECIPIENT}
       - --allow-insecure-genesis-sync
@@ -71,7 +74,7 @@ services:
       - ./data/consensus-data:/consensus-data
       - ./config/metadata:/config
     depends_on:
-      - reth
+      - geth
     restart: unless-stopped
 
   validator:
