@@ -16,6 +16,7 @@ First, install Docker. Then, run:
 ```
 git clone https://github.com/os555/eth-pos-mbc && cd eth-pos-mbc
 ./generate_genesis_data.sh
+openssl rand -hex 32 | tr -d "\n" > ./config/metadata/jwtsecret
 docker compose up -d
 ```
 
